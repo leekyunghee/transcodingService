@@ -3,6 +3,8 @@ package leekyunghee.examples.tdd.transcodingService;
 import java.io.File;
 import java.util.List;
 
+import leekyunghee.examples.tdd.transcodingService.Job.State;
+
 public class TranscodingServiceImpl implements TranscodingService {
 
 	private MediaSourceCopier mediaSourceCopier;
@@ -10,20 +12,25 @@ public class TranscodingServiceImpl implements TranscodingService {
 	private CreatedFileSender createdFileSender;
 	private ThumbnailExtractor thumbnailExtractor;
 	private JobResultNotifier jobResultNotifier;
+	private JobStateChanger jobStateChanger;
+	private TranscodingExceptionHandler transcodingExceptionHandler;
 	
 	public TranscodingServiceImpl(MediaSourceCopier mediaSourceCopier,
 		Transcoder transcoder, ThumbnailExtractor thumbnailExtractor,
 		CreatedFileSender createdFileSender,
-		JobResultNotifier jobResultNotifier) {
+		JobResultNotifier jobResultNotifier, JobStateChanger jobStateChanger, TranscodingExceptionHandler transcodingExceptionHandler) {
 		
 		this.mediaSourceCopier = mediaSourceCopier;
 		this.transcoder = transcoder;
 		this.thumbnailExtractor = thumbnailExtractor;
 		this.createdFileSender = createdFileSender;
 		this.jobResultNotifier = jobResultNotifier;
+		this.jobStateChanger = jobStateChanger;
+		this.transcodingExceptionHandler = transcodingExceptionHandler;
 	}
 
 	public void transcode(Long jobId) {
+		changeJobState(jobId, Job.State.MEDIASOURCECOPYING);
 		// 미디어 원본으로 부터 파일을 로컬에 복사한다. 
 		File multimediaFile = copyMultimediaSourceToLocal(jobId);
 		// 로컬에 복사된 파일을 변환처리 한다. 
@@ -34,6 +41,11 @@ public class TranscodingServiceImpl implements TranscodingService {
 		sendCreateFilesToDestination(multimediaFiles, thumbnails, jobId);
 		// 결과를 통지 
 		notifyJobResultToRequester(jobId);
+		changeJobState(jobId, Job.State.COMPLETED);
+	}
+
+	private void changeJobState(Long jobId, State newJobState) {
+		jobStateChanger.changeJobState(jobId, newJobState);
 	}
 
 	private void notifyJobResultToRequester(Long jobId) {
@@ -54,6 +66,11 @@ public class TranscodingServiceImpl implements TranscodingService {
 	}
 
 	private File copyMultimediaSourceToLocal(Long jobId) {
-		return mediaSourceCopier.copy(jobId);
+		try {
+			return mediaSourceCopier.copy(jobId);
+		}catch(RuntimeException ex) {
+			transcodingExceptionHandler.notifyToJob(jobId, ex);
+			throw ex;
+		}
 	}
 }

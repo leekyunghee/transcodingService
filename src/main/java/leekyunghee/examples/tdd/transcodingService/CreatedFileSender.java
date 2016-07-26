@@ -7,4 +7,6 @@ public interface CreatedFileSender {
 
 	void send(List<File> multimediaFiles, List<File> thumbnails, Long jobId);
 
+	void store(List<File> anyListOf, List<File> anyListOf2, long anyLong);
+
 }
