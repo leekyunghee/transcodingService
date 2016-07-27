@@ -30,5 +30,8 @@ public class Job {
 	public void exceptionOccurred(RuntimeException ex) {
 		occurredException = ex;
 	}
+	public boolean isWaiting() {
+		return state == null;
+	}
 	
 }
