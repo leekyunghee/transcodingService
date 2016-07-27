@@ -34,12 +34,16 @@ public class TranscodingServiceImpl implements TranscodingService {
 		// 미디어 원본으로 부터 파일을 로컬에 복사한다. 
 		File multimediaFile = copyMultimediaSourceToLocal(jobId);
 		// 로컬에 복사된 파일을 변환처리 한다. 
+		changeJobState(jobId, Job.State.TRANSCODER);
 		List<File> multimediaFiles = transcode(multimediaFile, jobId);
 		// 로컬에 복사된 파일로부터 이미지를 추출한다. 
+		changeJobState(jobId, Job.State.THUMBNAILEXTRACTOR);
 		List<File> thumbnails = extractThumbnails(multimediaFile, jobId);
 		// 변환된 결과 파일과 썸네일 이미지를 목적지에 저장 
+		changeJobState(jobId, Job.State.CREATEDFILESENDOR);
 		sendCreateFilesToDestination(multimediaFiles, thumbnails, jobId);
 		// 결과를 통지 
+		changeJobState(jobId, Job.State.JOBRESULTNOTIFIER);
 		notifyJobResultToRequester(jobId);
 		changeJobState(jobId, Job.State.COMPLETED);
 	}
@@ -49,26 +53,50 @@ public class TranscodingServiceImpl implements TranscodingService {
 	}
 
 	private void notifyJobResultToRequester(Long jobId) {
-		jobResultNotifier.notifyToRequester(jobId);
-		
+		try {
+			jobResultNotifier.notifyToRequester(jobId);
+		} catch(RuntimeException ex) {
+			transcodingExceptionHandler.notifyToJob(jobId, ex);
+			throw ex;
+		}
 	}
 
 	private void sendCreateFilesToDestination(List<File> multimediaFiles, List<File> thumbnails, Long jobId) {
-		createdFileSender.send(multimediaFiles, thumbnails, jobId);
+		try {
+			createdFileSender.store(multimediaFiles, thumbnails, jobId);
+			
+		} catch(RuntimeException ex) {
+			transcodingExceptionHandler.notifyToJob(jobId, ex);
+			throw ex;
+		}
+
 	}
 
 	private List<File> extractThumbnails(File multimediaFile, Long jobId) {
-		return thumbnailExtractor.extract(multimediaFile, jobId);
+		try {
+			return thumbnailExtractor.extract(multimediaFile, jobId);
+			
+		} catch(RuntimeException ex) {
+			transcodingExceptionHandler.notifyToJob(jobId, ex);
+			throw ex;
+		}
 	}
 
 	private List<File> transcode(File multimediaFile, Long jobId) {
-		return transcoder.transcode(multimediaFile, jobId);
+		try {
+			return transcoder.transcode(multimediaFile, jobId);
+			
+		} catch (RuntimeException ex) {
+			transcodingExceptionHandler.notifyToJob(jobId, ex);
+			throw ex;
+		}
 	}
 
 	private File copyMultimediaSourceToLocal(Long jobId) {
 		try {
 			return mediaSourceCopier.copy(jobId);
-		}catch(RuntimeException ex) {
+			
+		} catch (RuntimeException ex) {
 			transcodingExceptionHandler.notifyToJob(jobId, ex);
 			throw ex;
 		}

@@ -6,5 +6,5 @@ import java.util.List;
 public interface Transcoder {
 
 	List<File> transcode(File multimediaFile, Long jobId);
-	
+
 }

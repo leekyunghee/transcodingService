@@ -3,7 +3,7 @@ package leekyunghee.examples.tdd.transcodingService;
 public class Job {
 	
 	public static enum State {
-		MEDIASOURCECOPYING, COMPLETED
+		MEDIASOURCECOPYING, COMPLETED, TRANSCODER, CREATEDFILESENDOR, JOBRESULTNOTIFIER, THUMBNAILEXTRACTOR
 	}
 	private State state;
 	private Exception occurredException;
