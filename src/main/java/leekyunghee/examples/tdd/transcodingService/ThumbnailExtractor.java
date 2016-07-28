@@ -5,6 +5,6 @@ import java.util.List;
 
 public interface ThumbnailExtractor {
 
-	List<File> extract(File multimediaFile, Long jobId);
+	List<File> extract(File multimediaFile, Long id);
 
 }

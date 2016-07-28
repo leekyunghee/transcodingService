@@ -10,10 +10,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
-import org.mockito.stubbing.Answer;
-
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
@@ -29,9 +26,8 @@ public class TranscodingServiceTest {
 	private RuntimeException mockException = new RuntimeException();
 	
 	private Long jobId = new Long(1);
-	
 	@Mock
-	private MediaSourceCopier mediaSourceCopier;
+	private MediaSourceFile mediaSourceFile;
 	@Mock
 	private Transcoder transcoder;
 	@Mock
@@ -45,51 +41,29 @@ public class TranscodingServiceTest {
 	private TranscodingService transcodingService;
 	@Mock
 	private JobRepository jobRepository;	// 객체의 영속성을 담는곳(repository)
-	@Mock
-	private JobStateChanger jobStateChanger;
-	@Mock
-	private TranscodingExceptionHandler transcodingExceptionHandler;
 	
-	private Job mockJob = new Job();
+	private Job mockJob = new Job(jobId);
 	
 	@Before
 	public void setup() {
-		transcodingService = new TranscodingServiceImpl(mediaSourceCopier, transcoder, 
-				thumbnailExtractor, createdFileSender, jobResultNotifier, jobStateChanger, transcodingExceptionHandler);
+		mockJob = new Job(jobId, mediaSourceFile);
+		transcodingService = new TranscodingServiceImpl(transcoder, 
+				thumbnailExtractor, createdFileSender, jobResultNotifier, jobRepository);
 
 		//when(jobRepository.findById(jobId)).thenReturn(new Job()); // 발생 후 리턴시켜주는 역할 
 		when(jobRepository.findById(jobId)).thenReturn(mockJob);
 		
 		//Long jobId = new Long(1);
 		// 필드로 바뀐 로컬 변수 선언 삭제됨. 
-		when(mediaSourceCopier.copy(jobId)).thenReturn(mockMultimediaFile);
+		when(mediaSourceFile.getSourceFile()).thenReturn(mockMultimediaFile);
 		
 		when(transcoder.transcode(mockMultimediaFile, jobId)).thenReturn(mockMultimediaFiles);
 		
 		when(thumbnailExtractor.extract(mockMultimediaFile, jobId)).thenReturn(mockThumbnails);		
-		
-		doAnswer(new Answer<Object>() {
-			@Override
-			public Object answer(InvocationOnMock invocation) throws Throwable {
-				Job.State newState = (State) invocation.getArguments()[1];
-				mockJob.changeState(newState);
-				return null;
-			}
-		}).when(jobStateChanger).changeJobState(anyLong(), any(Job.State.class));
-		
-		doAnswer(new Answer<Object>() {
-			@Override
-			public Object answer(InvocationOnMock invocation) throws Throwable {
-				RuntimeException ex = (RuntimeException) invocation.getArguments()[1];
-				mockJob.exceptionOccurred(ex);
-				return null;
-			}
-		}).when(transcodingExceptionHandler).notifyToJob(anyLong(), any(RuntimeException.class));
 	}
 
 	@Test
 	public void transcodeSuccessfully() {
-		// 필드로 바뀐 로컬 변수 선언 삭제됨. 
 
 		Job job = jobRepository.findById(jobId);
 		assertJobIsWaitingState();
@@ -108,7 +82,6 @@ public class TranscodingServiceTest {
 	}
 	
 	private void verifyCollaboration(VerifyOption verifyOption) {
-		verify(mediaSourceCopier, only()).copy(jobId);
 		
 		if(verifyOption.transcoderNever) {
 			verify(transcoder, never()).transcode(any(File.class), anyLong());
@@ -141,12 +114,12 @@ public class TranscodingServiceTest {
 	}
 	
 	@Test 
-	public void transcodingFailBecauseExceptionOccuredAtMediaSourceCopier() {
+	public void transcodingFailBecauseExceptionOccuredAtMediaSourceFile() {
 		// Job객체를 mockJob으로 필드로 빼고 각 테스트 메서드에서 jobRepository Mock 객체의 findById(jobId) 메서드가 호출되면
 		// mockJob을 리턴하도록 구현했다는 것이다. 
 		// 초기화 코드 제거 
 
-		when(mediaSourceCopier.copy(jobId)).thenThrow(mockException);
+		when(mediaSourceFile.getSourceFile()).thenThrow(mockException);
 		assertJobIsWaitingState();
 		excuteFailingTranscodeAndAssertFail(Job.State.MEDIASOURCECOPYING);
 
