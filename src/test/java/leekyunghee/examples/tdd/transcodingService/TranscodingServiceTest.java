@@ -42,7 +42,7 @@ public class TranscodingServiceTest {
 	@Mock
 	private JobRepository jobRepository;	// 객체의 영속성을 담는곳(repository)
 	
-	private Job mockJob = new Job(jobId);
+	private Job mockJob;
 	
 	@Before
 	public void setup() {

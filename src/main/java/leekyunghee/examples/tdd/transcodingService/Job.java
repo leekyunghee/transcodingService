@@ -15,9 +15,6 @@ public class Job {
 	private Long id;
 	private State state;
 	
-	public Job(Long id) {
-		this.id = id;
-	}
 	
 	public void transcode(Transcoder transcoder, ThumbnailExtractor thumbnailExtractor,
             CreatedFileSender createdFileSender,
