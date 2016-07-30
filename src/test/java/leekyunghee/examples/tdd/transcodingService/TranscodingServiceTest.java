@@ -11,7 +11,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+
 import static org.junit.Assert.*;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyListOf;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.*;
 
 
@@ -28,6 +32,8 @@ public class TranscodingServiceTest {
 	private Long jobId = new Long(1);
 	@Mock
 	private MediaSourceFile mediaSourceFile;
+	@Mock
+	private DestinationStorage destinationStorage;
 	@Mock
 	private Transcoder transcoder;
 	@Mock
@@ -46,7 +52,7 @@ public class TranscodingServiceTest {
 	
 	@Before
 	public void setup() {
-		mockJob = new Job(jobId, mediaSourceFile);
+		mockJob = new Job(jobId, mediaSourceFile, destinationStorage);
 		transcodingService = new TranscodingServiceImpl(transcoder, 
 				thumbnailExtractor, createdFileSender, jobResultNotifier, jobRepository);
 
@@ -76,36 +82,9 @@ public class TranscodingServiceTest {
 		assertEquals(Job.State.COMPLETED, job.getLastState());
 		assertNull(job.getOccurredException());
 		
-		VerifyOption verifyOption = new VerifyOption();
-		verifyCollaboration(verifyOption);
+		CollaborationVerifier colVerifier = new CollaborationVerifier();
+		colVerifier.verifyCollaboration();
 		// 협업 객체가 호출되는지의 여부를 확인하는 verify 중복 제거 		
-	}
-	
-	private void verifyCollaboration(VerifyOption verifyOption) {
-		
-		if(verifyOption.transcoderNever) {
-			verify(transcoder, never()).transcode(any(File.class), anyLong());
-		}else {
-			verify(transcoder, only()).transcode(any(File.class), anyLong());
-		}
-		
-		if(verifyOption.thumbnailExtractorNever) {
-			verify(thumbnailExtractor, never()).extract(any(File.class), anyLong());
-		}else {
-			verify(thumbnailExtractor, only()).extract(any(File.class), anyLong());
-		}
-		
-		if(verifyOption.createdFileSenderNever) {
-			verify(createdFileSender, never()).store(anyListOf(File.class), anyListOf(File.class), anyLong());
-		}else {
-			verify(createdFileSender, only()).store(anyListOf(File.class), anyListOf(File.class), anyLong());
-		}
-		
-		if(verifyOption.jobResultNotifierNever) {
-			verify(jobResultNotifier, never()).notifyToRequester(anyLong());			
-		}else {
-			verify(jobResultNotifier, only()).notifyToRequester(anyLong());
-		}
 	}
 
 	private void assertJobIsWaitingState() {
@@ -123,13 +102,13 @@ public class TranscodingServiceTest {
 		assertJobIsWaitingState();
 		excuteFailingTranscodeAndAssertFail(Job.State.MEDIASOURCECOPYING);
 
-        VerifyOption verifyOption = new VerifyOption();
-        verifyOption.transcoderNever = true;
-        verifyOption.thumbnailExtractorNever = true;
-        verifyOption.createdFileSenderNever = true;
-        verifyOption.jobResultNotifierNever = true;
+		CollaborationVerifier colVerifier = new CollaborationVerifier();
+		colVerifier.transcoderNever = true;
+		colVerifier.thumbnailExtractorNever = true;
+		colVerifier.destinationStorageNever = true;
+		colVerifier.jobResultNotifierNever = true;
 
-        verifyCollaboration(verifyOption);
+		colVerifier.verifyCollaboration();
 		
 	}
 	
@@ -155,13 +134,13 @@ public class TranscodingServiceTest {
 		assertJobIsWaitingState();
 		excuteFailingTranscodeAndAssertFail(Job.State.TRANSCODER);
 		
-		VerifyOption verifyOption = new VerifyOption();
-		verifyOption.transcoderNever = false;
-	    verifyOption.thumbnailExtractorNever = true;
-	    verifyOption.createdFileSenderNever = true;
-	    verifyOption.jobResultNotifierNever = true;
+		CollaborationVerifier colVerifier = new CollaborationVerifier();
+		colVerifier.transcoderNever = false;
+		colVerifier.thumbnailExtractorNever = true;
+		colVerifier.destinationStorageNever = true;
+		colVerifier.jobResultNotifierNever = true;
 
-	    verifyCollaboration(verifyOption);	
+		colVerifier.verifyCollaboration();	
 	}
 
 	@Test
@@ -171,30 +150,30 @@ public class TranscodingServiceTest {
 		assertJobIsWaitingState();
 		excuteFailingTranscodeAndAssertFail(Job.State.THUMBNAILEXTRACTOR);
 		
-		VerifyOption verifyOption = new VerifyOption();
-        verifyOption.transcoderNever = false;
-        verifyOption.thumbnailExtractorNever = false;
-        verifyOption.createdFileSenderNever = true;
-        verifyOption.jobResultNotifierNever = true;
+		CollaborationVerifier colVerifier = new CollaborationVerifier();
+		colVerifier.transcoderNever = false;
+		colVerifier.thumbnailExtractorNever = false;
+		colVerifier.destinationStorageNever = true;
+		colVerifier.jobResultNotifierNever = true;
 
-        verifyCollaboration(verifyOption);
+		colVerifier.verifyCollaboration();
 	}
 	
 	@Test
-	public void transcodingFailBecauseExceptionOccuredAtSendCreateFilesToDestination() {
+	public void transcodingFailBecauseExceptionOccuredAtDestinationStorage() {
 
 		// void 타입일 경우 doThrow 사용 
-		doThrow(mockException).when(createdFileSender).store(anyListOf(File.class), anyListOf(File.class), anyLong());
+		doThrow(mockException).when(destinationStorage).save(mockMultimediaFiles, mockThumbnails);
 		assertJobIsWaitingState();
 		excuteFailingTranscodeAndAssertFail(Job.State.CREATEDFILESENDOR);
 		
-		VerifyOption verifyOption = new VerifyOption();
-        verifyOption.transcoderNever = false;
-        verifyOption.thumbnailExtractorNever = false;
-        verifyOption.createdFileSenderNever = false;
-        verifyOption.jobResultNotifierNever = true;
+		CollaborationVerifier colVerifier = new CollaborationVerifier();
+		colVerifier.transcoderNever = false;
+		colVerifier.thumbnailExtractorNever = false;
+		colVerifier.destinationStorageNever = false;
+		colVerifier.jobResultNotifierNever = true;
 
-        verifyCollaboration(verifyOption);
+		colVerifier.verifyCollaboration();
 	}
 	
 	@Test
@@ -204,12 +183,86 @@ public class TranscodingServiceTest {
 		assertJobIsWaitingState();
 		excuteFailingTranscodeAndAssertFail(Job.State.JOBRESULTNOTIFIER);
 		
-		VerifyOption verifyOption = new VerifyOption();
-        verifyOption.transcoderNever = false;
-        verifyOption.thumbnailExtractorNever = false;
-        verifyOption.createdFileSenderNever = false;
-        verifyOption.jobResultNotifierNever = false;
+		CollaborationVerifier colVerifier = new CollaborationVerifier();
+		colVerifier.transcoderNever = false;
+		colVerifier.thumbnailExtractorNever = false;
+		colVerifier.destinationStorageNever = false;
+		colVerifier.jobResultNotifierNever = false;
 
-        verifyCollaboration(verifyOption);
+		colVerifier.verifyCollaboration();
 	}
+	
+	public class CollaborationVerifier {
+		
+		public boolean transcoderNever;
+	    public boolean thumbnailExtractorNever;
+	    public boolean destinationStorageNever;
+	    public boolean jobResultNotifierNever;
+	    
+	    public void verifyCollaboration() {
+			
+			if(this.transcoderNever) {
+				verify(transcoder, never()).transcode(any(File.class), anyLong());
+			}else {
+				verify(transcoder, only()).transcode(any(File.class), anyLong());
+			}
+			
+			if(this.thumbnailExtractorNever) {
+				verify(thumbnailExtractor, never()).extract(any(File.class), anyLong());
+			}else {
+				verify(thumbnailExtractor, only()).extract(any(File.class), anyLong());
+			}
+			
+//			if(verifyOption.createdFileSenderNever) {
+//				verify(createdFileSender, never()).store(anyListOf(File.class), anyListOf(File.class), anyLong());
+//			}else {
+//				verify(createdFileSender, only()).store(anyListOf(File.class), anyListOf(File.class), anyLong());
+//			}
+			if(this.destinationStorageNever) {
+				verify(destinationStorage, never()).save(anyListOf(File.class), anyListOf(File.class));
+			}else {
+				verify(destinationStorage, only()).save(mockMultimediaFiles, mockThumbnails);
+			}
+			
+			if(this.jobResultNotifierNever) {
+				verify(jobResultNotifier, never()).notifyToRequester(anyLong());			
+			}else {
+				verify(jobResultNotifier, only()).notifyToRequester(anyLong());
+			}
+		}
+	    
+	}
+	
+	
+//	private void verifyCollaboration(VerifyOption verifyOption) {
+//		
+//		if(verifyOption.transcoderNever) {
+//			verify(transcoder, never()).transcode(any(File.class), anyLong());
+//		}else {
+//			verify(transcoder, only()).transcode(any(File.class), anyLong());
+//		}
+//		
+//		if(verifyOption.thumbnailExtractorNever) {
+//			verify(thumbnailExtractor, never()).extract(any(File.class), anyLong());
+//		}else {
+//			verify(thumbnailExtractor, only()).extract(any(File.class), anyLong());
+//		}
+//		
+////		if(verifyOption.createdFileSenderNever) {
+////			verify(createdFileSender, never()).store(anyListOf(File.class), anyListOf(File.class), anyLong());
+////		}else {
+////			verify(createdFileSender, only()).store(anyListOf(File.class), anyListOf(File.class), anyLong());
+////		}
+//		if(verifyOption.destinationStorageNever) {
+//			verify(destinationStorage, never()).save(anyListOf(File.class), anyListOf(File.class));
+//		}else {
+//			verify(destinationStorage, only()).save(mockMultimediaFiles, mockThumbnails);
+//		}
+//		
+//		if(verifyOption.jobResultNotifierNever) {
+//			verify(jobResultNotifier, never()).notifyToRequester(anyLong());			
+//		}else {
+//			verify(jobResultNotifier, only()).notifyToRequester(anyLong());
+//		}
+//	}
 }
